@@ -64,7 +64,8 @@ The existing navigation delay prevents new reads during rapid scrolling.
 
 Host validation: `python3 tests/run_prefetch.py`. On console, check slow steps,
 held Up/Down, paging, favorites filtering, missing artwork and device changes.
-The bundled executable includes artwork prefetching. Console validation is still pending.
+Artwork prefetching has been tried on a real PS2. The latest favorites and UI
+changes have been checked in PCSX2.
 
 The packed executable is **`dist/OPL_CUSTOM.ELF`** (about 1.3 MiB).
 
@@ -75,7 +76,8 @@ The packed executable is **`dist/OPL_CUSTOM.ELF`** (about 1.3 MiB).
 
 No HDD reformat or artwork conversion is needed. It uses your existing OPL
 configuration and game library. This is a development build, not an official
-OPL release. It compiles for PS2, but has not yet been tested on a console.
+OPL release. Further console testing of the latest favorites and UI changes is
+still needed.
 
 Suggested console checks: mark two games, filter with L3, launch one, reboot and
 verify the markers, unmark every favorite, exit the empty filter, and refresh the
@@ -87,8 +89,8 @@ The favorites save now uses its own completion flag. Background game-config
 loading can no longer dismiss the save dialog early and skip the marker update.
 R3 saves and updates the list immediately; Save Changes and restart are not needed.
 Saving a favorite keeps the normal screen visible without a progress overlay.
-Filtering preserves the selected game when possible and fills short pages from
-above, so earlier favorites are not hidden off-screen unnecessarily.
+All Games and Favorites remember separate selections and page positions, so
+switching views returns to where you left each list.
 
 The local PCSX2 development profile lives under `.tools/pcsx2/PCSX2`, separate
 from normal emulator settings and memory cards. Run `./Run-Emulator.ps1` after

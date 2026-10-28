@@ -1,17 +1,81 @@
-# Open PS2 Loader
+# OPL Custom — Open PS2 Loader fork
 
 ![logo](https://github.com/ps2homebrew/Open-PS2-Loader/blob/master/gfx/logo.png)
+
+**This is an unofficial fork of [Open PS2 Loader (OPL)](https://github.com/ps2homebrew/Open-PS2-Loader)**,
+focused on favorites and smoother game-library browsing. It is based on upstream
+commit `b3a21997` (v1.2.0 Beta, revision 2271). This is not an official OPL release.
+
+## What this fork adds
+
+- **Favorites:** press **R3** to favorite or unfavorite the selected game, and
+  **L3** to switch between All Games and Favorites. Changes save immediately.
+- **Configurable favorites storage:** choose **Settings → Favorites storage**.
+  **Game device** (default) keeps a separate `conf_favorites.cfg` with each USB,
+  HDD, or SMB library, so favorites travel with that library. **Memory card
+  (shared)** uses one master file in the memory card's OPL folder across devices.
+  Switching modes preserves both lists without merging them. Use **Save Changes**
+  to retain the storage preference; individual favorite changes save automatically.
+- **Independent list positions:** All Games and Favorites remember their own
+  selection and scroll position per device for the current session. Switching
+  views returns to where you left that list. Refreshing a library resets these
+  positions.
+- **Nearby artwork preloading:** asynchronously loads cover and disc/icon images
+  for the next two visible games above and below the selection. It respects the
+  favorites filter, drops obsolete queued work, and limits speculative loading
+  during navigation.
+- **Game-list UI improvements:** gold star icons mark favorites without shifting
+  game names. The top shows only the current view heading, with extra space above
+  the list. L3/R3 icons join the bottom button legend, using **Favorites / All
+  Games** and **Favorite / Unfavorite** labels. Favorite saves keep the normal
+  screen visible without flashing a progress dialog.
+- **Build and development tools:** a Docker-based Windows build script, host
+  regression tests, emulator launch helpers, and a fix for C header dependency
+  tracking in the Makefile.
+
+Favorites use game startup IDs, so renaming a game preserves its favorite status.
+In Game device mode, copies of the same game on different devices are independent;
+in Memory card mode, they share their favorite status. Apps are not filtered.
+
+## Build and try this fork
+
+Start Docker Desktop with its Linux engine, then run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Build-Custom.ps1
+```
+
+The script runs the favorites/navigation and artwork-cache tests, builds OPL,
+and writes the packed executable to **`dist/OPL_CUSTOM.ELF`**, with a SHA-256
+checksum. Launch that ELF using wLaunchELF or your existing homebrew launcher.
+Generated builds, BIOS files, emulator profiles, and disk images are not committed.
+
+For host tests on Linux with a C compiler:
+
+```sh
+python3 tests/run_favorites.py
+python3 tests/run_prefetch.py
+```
+
+See [CUSTOM.md](CUSTOM.md) for storage paths, controls, emulator testing, and
+additional build details. Artwork preloading has been tried on a real PS2;
+the latest favorites and UI changes have been checked in PCSX2.
+
+## Upstream project and license
 
 Copyright 2013, Ifcaro & jimmikaelkael  
 Licensed under Academic Free License version 3.0  
 Review the LICENSE file for further details.  
+
+The badges and community/download links below refer to **upstream OPL**, not
+this fork. The remaining documentation describes the inherited OPL features.
 
 [![CI](https://github.com/ps2homebrew/Open-PS2-Loader/actions/workflows/compilation.yml/badge.svg?branch=master)](https://github.com/ps2homebrew/Open-PS2-Loader/actions/workflows/compilation.yml)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/99032a6a180243bfa0d0e23efeb0608d)](https://www.codacy.com/gh/ps2homebrew/Open-PS2-Loader/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=ps2homebrew/Open-PS2-Loader&amp;utm_campaign=Badge_Grade)
 [![Discord](https://img.shields.io/discord/652861436992946216?style=flat&logo=Discord)](https://discord.gg/CVFUa9xh6B)
 [![Mega](https://img.shields.io/badge/Mega-%23D90007.svg?style=flat&logo=Mega&logoColor=white)](https://mega.nz/folder/Ndwi1bAK#oLWNhH_g-h0p4BoT4c556A)
 
-## Introduction
+## Upstream OPL overview
 
 Open PS2 Loader (OPL) is a 100% open-source PS2 game and application loader for
 the PS2 and PS3 video game consoles.
@@ -33,7 +97,8 @@ All of the devices mentioned above support multiple file formats, including:
 - Expansion port HDDs support the HDLoader format.
 
 >[!TIP]
-[RiptOPL](https://nathanneurotic.github.io/Open-PS2-Loader/) is a fork of this project which heavily uses LLM tools to accelerate its development.  
+[RiptOPL](https://nathanneurotic.github.io/Open-PS2-Loader/) is another fork of
+upstream OPL which heavily uses LLM tools to accelerate its development.
 
 >[!NOTE]
 OPL is developed continuously - anyone can contribute improvements to the project due to its open-source nature.  
