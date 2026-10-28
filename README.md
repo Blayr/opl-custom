@@ -16,10 +16,6 @@ commit `b3a21997` (v1.2.0 Beta, revision 2271). This is not an official OPL rele
   (shared)** uses one master file in the memory card's OPL folder across devices.
   Switching modes preserves both lists without merging them. Use **Save Changes**
   to retain the storage preference; individual favorite changes save automatically.
-- **Independent list positions:** All Games and Favorites remember their own
-  selection and scroll position per device for the current session. Switching
-  views returns to where you left that list. Refreshing a library resets these
-  positions.
 - **Nearby artwork preloading:** asynchronously loads cover and disc/icon images
   for the next two visible games above and below the selection. It respects the
   favorites filter, drops obsolete queued work, and limits speculative loading
