@@ -13,6 +13,8 @@
 #define MENU_POS_V     50
 #define HINT_HEIGHT    32
 #define DECORATOR_SIZE 20
+#define FAVORITE_SIZE  16
+#define FAVORITE_GAP   4
 
 extern const char conf_theme_OPL_cfg;
 extern u16 size_conf_theme_OPL_cfg;
@@ -862,25 +864,41 @@ static void drawBDMIndex(struct menu_list *menu, struct submenu_list *item, conf
         rmDrawPixmap(indexTex, elem->posX, elem->posY, elem->aligned, elem->width, elem->height, elem->scaled, gDefaultCol);
 }
 
+static void drawFavoriteStar(int left, int y, short aligned)
+{
+    GSTEXTURE *star = thmGetTexture(FAVORITE_ICON);
+    if (star) {
+        int top = (aligned & ALIGN_VCENTER) ? y - FAVORITE_SIZE / 2 : y + (MENU_ITEM_HEIGHT - FAVORITE_SIZE) / 2;
+        rmDrawPixmap(star, left - FAVORITE_SIZE - FAVORITE_GAP, top,
+                     ALIGN_NONE, FAVORITE_SIZE, FAVORITE_SIZE, SCALING_NONE, gDefaultCol);
+    }
+}
+
 static void drawItemsList(struct menu_list *menu, struct submenu_list *item, config_set_t *config, struct theme_element *elem)
 {
     item_list_t *support = menu->item->userdata;
+    int posX = elem->posX, posY = elem->posY;
+    if (elem->aligned) {
+        posX -= elem->width >> 1;
+        posY -= elem->height >> 1;
+    }
     if (support->mode != APP_MODE) {
+        // Reserve one row between the heading and the games. The visible count
+        // is reduced by the same amount when the theme is loaded, keeping the
+        // last row and the bottom margin in their original positions.
+        int topGap = elem->height >= 2 * MENU_ITEM_HEIGHT ? MENU_ITEM_HEIGHT : 0;
+        posY += topGap;
         const char *hint = _l(menu->item->favoritesOnly ? _STR_FAVORITES_HINT_FILTERED : _STR_FAVORITES_HINT_ALL);
         fntRenderString(elem->font, elem->posX, elem->posY - MENU_ITEM_HEIGHT,
                         elem->aligned, elem->width, MENU_ITEM_HEIGHT, hint, elem->color);
+        if (menu->item->favoritesOnly)
+            drawFavoriteStar(posX, elem->posY - MENU_ITEM_HEIGHT, elem->aligned);
         if (!item && menu->item->favoritesOnly)
-            fntRenderString(elem->font, elem->posX, elem->posY, elem->aligned,
+            fntRenderString(elem->font, elem->posX, elem->posY + topGap, elem->aligned,
                             elem->width, elem->height, _l(_STR_FAVORITES_EMPTY), elem->color);
     }
     if (item) {
         items_list_t *itemsList = (items_list_t *)elem->extended;
-
-        int posX = elem->posX, posY = elem->posY;
-        if (elem->aligned) {
-            posX -= elem->width >> 1;
-            posY -= elem->height >> 1;
-        }
 
         submenu_list_t *ps = menu->item->pagestart;
         int others = 0;
@@ -891,8 +909,9 @@ static void drawItemsList(struct menu_list *menu, struct submenu_list *item, con
             else
                 color = elem->color;
 
-            char title[256];
-            snprintf(title, sizeof(title), "%s%s", ps->item.favorite ? "* " : "", submenuItemGetText(&ps->item));
+            const char *title = submenuItemGetText(&ps->item);
+            if (support->mode != APP_MODE && ps->item.favorite)
+                drawFavoriteStar(posX, posY, elem->aligned);
             if (itemsList->decoratorImage) {
                 GSTEXTURE *itemIconTex = getGameImageTexture(itemsList->decoratorImage->cache, menu->item->userdata, &ps->item);
                 if (itemIconTex && itemIconTex->Mem)
@@ -1378,6 +1397,11 @@ static void thmLoad(const char *themePath)
         validateGUIElems(themePath, themeConfig, newT);
 
     newT->itemsList = newT->gamesItemsList;
+    if (newT->gamesItemsList) {
+        items_list_t *gamesList = newT->gamesItemsList->extended;
+        if (gamesList->displayedItems > 1)
+            gamesList->displayedItems--;
+    }
 
     configFree(themeConfig);
 
@@ -1409,6 +1433,9 @@ static void thmLoad(const char *themePath)
     // Customizable icons
     for (i = BDM_ICON; i <= START_ICON; i++)
         thmLoadResource(&newT->textures[i], i, themePath, GS_PSM_CT32, newT->useDefault);
+
+    // Older themes have no favorite icon; always fall back to the bundled star.
+    thmLoadResource(&newT->textures[FAVORITE_ICON], FAVORITE_ICON, themePath, GS_PSM_CT32, 1);
 
     /* Not customizable icons - currently unused.
     for (i = L1_ICON; i <= R3_ICON; i++)
