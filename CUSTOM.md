@@ -7,6 +7,9 @@ A small fork of official Open PS2 Loader, based on upstream commit
 
 - **R3** (click the right stick): mark or unmark the selected game.
 - **L3** (click the left stick): switch the current device between all games and favorites.
+- L3/R3 hints appear in the bottom button legend. L3 shows the destination view;
+  R3 shows **Favorite** or **Unfavorite** for the selected game. The top heading
+  shows only **All Games** or **Favorites**.
 - Favorite games have a **gold star icon** in the left gutter, keeping game names
   aligned. The Favorites heading uses the same icon. Themes can supply `favorite.png`.
 - The same controls also work on the Square/info screen.

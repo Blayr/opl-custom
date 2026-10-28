@@ -704,15 +704,15 @@ gui_strings:
   label: PARENLOCK_GAME_NO_PASSWORD
   string: Set a parental lock password, or this game will not be locked.
 
-- comment: Game list controls when showing all games.
+- comment: Heading for the full game list; also the L3 action in favorites view.
   label: FAVORITES_HINT_ALL
-  string: 'All games   L3: Favorites   R3: Mark'
-- comment: Game list controls when showing favorites only.
+  string: All Games
+- comment: Heading for favorites; also the L3 action in the full game list.
   label: FAVORITES_HINT_FILTERED
-  string: 'Favorites   L3: All games   R3: Unmark'
+  string: Favorites
 - comment: Empty favorites list; L3 returns to the full game list.
   label: FAVORITES_EMPTY
-  string: 'No favorites here. Press L3 to show all games.'
+  string: No favorites here.
 - label: FAVORITES_STORAGE
   string: Favorites storage
 - label: FAVORITES_STORAGE_DEVICE
@@ -721,3 +721,7 @@ gui_strings:
   string: Memory card (shared)
 - label: FAVORITES_STORAGE_HINT
   string: Use device lists or a shared memory-card list. Lists stay separate.
+- label: FAVORITE_ACTION
+  string: Favorite
+- label: UNFAVORITE_ACTION
+  string: Unfavorite

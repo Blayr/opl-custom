@@ -967,34 +967,59 @@ static void drawItemText(struct menu_list *menu, struct submenu_list *item, conf
     }
 }
 
-static void drawHintText(struct menu_list *menu, struct submenu_list *item, config_set_t *config, struct theme_element *elem)
+static void drawButtonHints(struct menu_list *menu, struct submenu_list *item, struct theme_element *elem,
+                            int *textIds, int *iconIds, int count)
 {
-    menu_hint_item_t *hint = menu->item->hints;
-    if (hint) {
-        int x = elem->posX;
-
-        if (elem->aligned)
-            x = guiAlignMenuHints(hint, elem->font, elem->width);
-
-        for (; hint; hint = hint->next) {
-            x = guiDrawIconAndText(hint->icon_id, hint->text_id, elem->font, x, elem->posY, elem->color);
-            x += elem->width;
+    item_list_t *support = menu->item->userdata;
+    if (support->mode != APP_MODE && support->enabled) {
+        textIds[count] = menu->item->favoritesOnly ? _STR_FAVORITES_HINT_ALL : _STR_FAVORITES_HINT_FILTERED;
+        iconIds[count++] = L3_ICON;
+        if (item) {
+            textIds[count] = item->item.favorite ? _STR_UNFAVORITE_ACTION : _STR_FAVORITE_ACTION;
+            iconIds[count++] = R3_ICON;
         }
     }
+    if (!count)
+        return;
+
+    // Keep the complete legend centered, tightening only the gaps as needed.
+    int contentWidth = 0;
+    for (int i = 0; i < count; i++) {
+        GSTEXTURE *icon = thmGetTexture(iconIds[i]);
+        contentWidth += rmUnScaleX(fntCalcDimensions(elem->font, _l(textIds[i])));
+        if (icon)
+            contentWidth += rmWideScale(icon->Width * 20 / icon->Height) + 2;
+    }
+    int gap = elem->width;
+    if (count > 1) {
+        int availableGap = (screenWidth - 32 - contentWidth) / (count - 1);
+        if (gap > availableGap)
+            gap = availableGap > 0 ? availableGap : 0;
+    }
+
+    int x = elem->aligned ? guiAlignSubMenuHints(count, textIds, iconIds, elem->font, gap, 1) : elem->posX;
+    for (int i = 0; i < count; i++) {
+        x = guiDrawIconAndText(iconIds[i], textIds[i], elem->font, x, elem->posY, elem->color);
+        x += gap;
+    }
+}
+
+static void drawHintText(struct menu_list *menu, struct submenu_list *item, config_set_t *config, struct theme_element *elem)
+{
+    int textIds[16], iconIds[16], count = 0;
+    for (menu_hint_item_t *hint = menu->item->hints; hint && count < 14; hint = hint->next) {
+        textIds[count] = hint->text_id;
+        iconIds[count++] = hint->icon_id;
+    }
+    drawButtonHints(menu, item, elem, textIds, iconIds, count);
 }
 
 static void drawInfoHintText(struct menu_list *menu, struct submenu_list *item, config_set_t *config, struct theme_element *elem)
 {
-    int infoHints[2] = {_STR_RUN, _STR_BACK};
-    int infoIcons[2] = {CIRCLE_ICON, CROSS_ICON};
-    int x = elem->posX;
-
-    if (elem->aligned)
-        x = guiAlignSubMenuHints(2, infoHints, infoIcons, elem->font, elem->width, 1);
-
-    x = guiDrawIconAndText(gSelectButton == KEY_CIRCLE ? infoIcons[0] : infoIcons[1], infoHints[0], elem->font, x, elem->posY, elem->color);
-    x += elem->width;
-    x = guiDrawIconAndText(gSelectButton == KEY_CIRCLE ? infoIcons[1] : infoIcons[0], infoHints[1], elem->font, x, elem->posY, elem->color);
+    int infoHints[4] = {_STR_RUN, _STR_BACK};
+    int infoIcons[4] = {gSelectButton == KEY_CIRCLE ? CIRCLE_ICON : CROSS_ICON,
+                        gSelectButton == KEY_CIRCLE ? CROSS_ICON : CIRCLE_ICON};
+    drawButtonHints(menu, item, elem, infoHints, infoIcons, 2);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1436,6 +1461,8 @@ static void thmLoad(const char *themePath)
 
     // Older themes have no favorite icon; always fall back to the bundled star.
     thmLoadResource(&newT->textures[FAVORITE_ICON], FAVORITE_ICON, themePath, GS_PSM_CT32, 1);
+    thmLoadResource(&newT->textures[L3_ICON], L3_ICON, themePath, GS_PSM_CT32, 1);
+    thmLoadResource(&newT->textures[R3_ICON], R3_ICON, themePath, GS_PSM_CT32, 1);
 
     /* Not customizable icons - currently unused.
     for (i = L1_ICON; i <= R3_ICON; i++)

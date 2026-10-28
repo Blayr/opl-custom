@@ -98,6 +98,8 @@ extern void *logo_png;
 extern void *case_png;
 extern void *apps_case_png;
 extern void *favorite_png;
+extern void *L3_png;
+extern void *R3_png;
 
 // Not related to screen size, just to limit at some point
 static int maxSize = 720 * 512 * 4;
@@ -218,6 +220,8 @@ static texture_t internalDefault[TEXTURES_COUNT] = {
     {CASE_OVERLAY, "case", &case_png},
     {APPS_CASE_OVERLAY, "apps_case", &apps_case_png},
     {FAVORITE_ICON, "favorite", &favorite_png},
+    {L3_ICON, "L3", &L3_png},
+    {R3_ICON, "R3", &R3_png},
 };
 
 int texLookupInternalTexId(const char *name)
