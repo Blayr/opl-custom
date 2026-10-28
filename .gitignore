@@ -54,3 +54,9 @@ lng/lang_*.lng
 src/lang_internal.c
 include/lang_autogen.h
 tmp/
+
+# Local favorites development tools and packaged builds
+/.tools/
+/dist/
+/build-custom.log
+/tests/__pycache__/

@@ -34,6 +34,10 @@ typedef struct
     char *suffix;
 
     int nextUID;
+    void *prefetchOwner;
+    int prefetchItem;
+    int prefetchFilter;
+    unsigned int prefetchGeneration;
 
     /// the cache entries itself
     cache_entry_t *content;
@@ -56,5 +60,7 @@ image_cache_t *cacheInitCache(int userId, const char *prefix, int isPrefixRelati
 void cacheDestroyCache(image_cache_t *cache);
 
 GSTEXTURE *cacheGetTexture(image_cache_t *cache, item_list_t *list, int *cacheId, int *UID, char *value);
+void cacheSetPrefetchWindow(image_cache_t *cache, void *owner, int item, int filter);
+void cachePrefetchTexture(image_cache_t *cache, item_list_t *list, int *cacheId, int *UID, char *value);
 
 #endif

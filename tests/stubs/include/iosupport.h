@@ -1,0 +1,5 @@
+#ifndef FAVORITES_HOST_IOSUPPORT_H
+#define FAVORITES_HOST_IOSUPPORT_H
+#define MODE_COUNT 8
+#define APP_MODE   7
+#endif

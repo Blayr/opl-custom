@@ -17,6 +17,7 @@
 #include "include/system.h"
 #include "include/ioman.h"
 #include "include/sound.h"
+#include "include/favorites.h"
 #include <assert.h>
 
 enum MENU_IDs {
@@ -414,6 +415,7 @@ static submenu_list_t *submenuAllocItem(int icon_id, char *text, int id, int tex
     it->item.text = text;
     it->item.text_id = text_id;
     it->item.id = id;
+    it->item.favorite = 0;
     it->item.cache_id = NULL;
     it->item.cache_uid = NULL;
     submenuRebuildCache(it);
@@ -630,11 +632,11 @@ static void menuFirstPage()
 {
     submenu_list_t *cur = selected_item->item->current;
     if (cur) {
-        if (cur->prev) {
+        if (menuPrevVisible(selected_item->item, cur)) {
             sfxPlay(SFX_CURSOR);
         }
 
-        selected_item->item->current = selected_item->item->submenu;
+        selected_item->item->current = menuFirstVisible(selected_item->item);
         selected_item->item->pagestart = selected_item->item->current;
     }
 }
@@ -643,17 +645,17 @@ static void menuLastPage()
 {
     submenu_list_t *cur = selected_item->item->current;
     if (cur) {
-        if (cur->next) {
+        if (menuNextVisible(selected_item->item, cur)) {
             sfxPlay(SFX_CURSOR);
         }
-        while (cur->next)
-            cur = cur->next; // go to end
+        while (menuNextVisible(selected_item->item, cur))
+            cur = menuNextVisible(selected_item->item, cur); // go to end
 
         selected_item->item->current = cur;
 
         int itms = ((items_list_t *)gTheme->itemsList->extended)->displayedItems;
-        while (--itms && cur->prev) // and move back to have a full page
-            cur = cur->prev;
+        while (--itms && menuPrevVisible(selected_item->item, cur)) // and move back to have a full page
+            cur = menuPrevVisible(selected_item->item, cur);
 
         selected_item->item->pagestart = cur;
     }
@@ -663,8 +665,8 @@ static void menuNextV()
 {
     submenu_list_t *cur = selected_item->item->current;
 
-    if (cur && cur->next) {
-        selected_item->item->current = cur->next;
+    if (cur && menuNextVisible(selected_item->item, cur)) {
+        selected_item->item->current = menuNextVisible(selected_item->item, cur);
         sfxPlay(SFX_CURSOR);
 
         // if the current item is beyond the page start, move the page start one page down
@@ -674,7 +676,7 @@ static void menuNextV()
             if (selected_item->item->current == cur)
                 return;
             else
-                cur = cur->next;
+                cur = menuNextVisible(selected_item->item, cur);
 
         selected_item->item->pagestart = selected_item->item->current;
     } else { // wrap to start
@@ -686,15 +688,15 @@ static void menuPrevV()
 {
     submenu_list_t *cur = selected_item->item->current;
 
-    if (cur && cur->prev) {
-        selected_item->item->current = cur->prev;
+    if (cur && menuPrevVisible(selected_item->item, cur)) {
+        selected_item->item->current = menuPrevVisible(selected_item->item, cur);
         sfxPlay(SFX_CURSOR);
 
         // if the current item is on the page start, move the page start one page up
         if (selected_item->item->pagestart == cur) {
             int itms = ((items_list_t *)gTheme->itemsList->extended)->displayedItems + 1; // +1 because the selection will move as well
-            while (--itms && selected_item->item->pagestart->prev)
-                selected_item->item->pagestart = selected_item->item->pagestart->prev;
+            while (--itms && menuPrevVisible(selected_item->item, selected_item->item->pagestart))
+                selected_item->item->pagestart = menuPrevVisible(selected_item->item, selected_item->item->pagestart);
         }
     } else { // wrap to end
         menuLastPage();
@@ -705,12 +707,12 @@ static void menuNextPage()
 {
     submenu_list_t *cur = selected_item->item->pagestart;
 
-    if (cur && cur->next) {
+    if (cur && menuNextVisible(selected_item->item, cur)) {
         int itms = ((items_list_t *)gTheme->itemsList->extended)->displayedItems + 1;
         sfxPlay(SFX_CURSOR);
 
-        while (--itms && cur->next)
-            cur = cur->next;
+        while (--itms && menuNextVisible(selected_item->item, cur))
+            cur = menuNextVisible(selected_item->item, cur);
 
         selected_item->item->current = cur;
         selected_item->item->pagestart = selected_item->item->current;
@@ -723,12 +725,12 @@ static void menuPrevPage()
 {
     submenu_list_t *cur = selected_item->item->pagestart;
 
-    if (cur && cur->prev) {
+    if (cur && menuPrevVisible(selected_item->item, cur)) {
         int itms = ((items_list_t *)gTheme->itemsList->extended)->displayedItems + 1;
         sfxPlay(SFX_CURSOR);
 
-        while (--itms && cur->prev)
-            cur = cur->prev;
+        while (--itms && menuPrevVisible(selected_item->item, cur))
+            cur = menuPrevVisible(selected_item->item, cur);
 
         selected_item->item->current = cur;
         selected_item->item->pagestart = selected_item->item->current;
@@ -998,6 +1000,101 @@ void menuRenderMain(void)
     }
 }
 
+static char favoriteStartup[CONFIG_KEY_NAME_LEN];
+static int favoriteTarget;
+static int favoriteMode;
+static int favoriteSaved;
+// Rendering the progress dialog can complete a game-config request and clear
+// actionStatus. Favorites must wait for their own worker, not that shared flag.
+static int favoriteSavePending;
+
+static void menuRefreshFavorites(void)
+{
+    for (menu_list_t *source = menu; source; source = source->next) {
+        item_list_t *list = source->item->userdata;
+        if (list->mode == APP_MODE)
+            continue;
+        for (submenu_list_t *game = source->item->submenu; game; game = game->next)
+            game->item.favorite = favoritesContains(list->mode, list->itemGetStartup(list, game->item.id));
+        menuNormalizePage(source->item, ((items_list_t *)gTheme->itemsList->extended)->displayedItems);
+    }
+}
+
+static int favoritesReloadPending;
+
+static void menuLoadFavorites(void)
+{
+    for (menu_list_t *source = menu; source; source = source->next) {
+        item_list_t *list = source->item->userdata;
+        if (list->mode != APP_MODE && list->enabled)
+            favoritesLoad(list->mode, list->itemGetPrefix ? list->itemGetPrefix(list) : NULL);
+    }
+    favoritesReloadPending = 0;
+}
+
+void menuReloadFavorites(void)
+{
+    favoritesReloadPending = 1;
+    guiGameHandleDeferedIO(&favoritesReloadPending, NULL, IO_CUSTOM_SIMPLEACTION, &menuLoadFavorites);
+    menuRefreshFavorites();
+    itemConfigId = -1;
+    DisableCron = 1;
+    RemainSecs = 0;
+}
+
+static void menuSaveFavorite(void)
+{
+    favoriteSaved = favoritesSet(favoriteMode, favoriteStartup, favoriteTarget);
+    if (!favoriteSaved)
+        setErrorMessage(_STR_ERROR_SAVING_SETTINGS);
+    favoriteSavePending = 0;
+}
+
+static void menuToggleFavorite(void)
+{
+    menu_item_t *currentMenu = selected_item->item;
+    item_list_t *support = currentMenu->userdata;
+    if (support->mode == APP_MODE || !currentMenu->current)
+        return;
+
+    const char *startup = support->itemGetStartup(support, currentMenu->current->item.id);
+    if (!startup || strlen(startup) >= sizeof(favoriteStartup))
+        return;
+    strcpy(favoriteStartup, startup);
+    DisableCron = 1;
+    RemainSecs = 0;
+    favoriteMode = support->mode;
+    favoriteTarget = !favoritesContains(favoriteMode, favoriteStartup);
+    favoriteSaved = 0;
+    favoriteSavePending = 1;
+    // Keep drawing the normal screen while IO completes, without a flashing
+    // full-screen progress overlay for this small write.
+    guiGameHandleDeferedIO(&favoriteSavePending, NULL, IO_CUSTOM_SIMPLEACTION, &menuSaveFavorite);
+    if (!favoriteSaved)
+        return;
+
+    // Shared storage updates copies on every device; device storage stays local.
+    menuRefreshFavorites();
+    if (currentMenu->current == NULL || currentMenu->current->item.id != itemConfigId)
+        itemConfigId = -1;
+    sfxPlay(SFX_CONFIRM);
+}
+
+static void menuToggleFavoritesFilter(void)
+{
+    menu_item_t *currentMenu = selected_item->item;
+    item_list_t *support = currentMenu->userdata;
+    if (support->mode == APP_MODE)
+        return;
+    menuToggleFavoritesView(currentMenu, ((items_list_t *)gTheme->itemsList->extended)->displayedItems);
+    if (currentMenu->current == NULL || currentMenu->current->item.id != itemConfigId)
+        itemConfigId = -1;
+    // Filtering must not auto-launch a different game through a stale countdown.
+    DisableCron = 1;
+    RemainSecs = 0;
+    sfxPlay(SFX_CURSOR);
+}
+
 void menuHandleInputMain()
 {
     if (getKey(KEY_LEFT)) {
@@ -1016,6 +1113,10 @@ void menuHandleInputMain()
         selected_item->item->execCircle(selected_item->item);
     } else if (getKeyOn(KEY_SQUARE)) {
         selected_item->item->execSquare(selected_item->item);
+    } else if (getKeyOn(KEY_R3)) {
+        menuToggleFavorite();
+    } else if (getKeyOn(KEY_L3)) {
+        menuToggleFavoritesFilter();
     } else if (getKeyOn(KEY_START)) {
         // reinit main menu - show/hide items valid in the active context
         menuInitMainMenu();
@@ -1058,7 +1159,14 @@ void menuRenderInfo(void)
 
 void menuHandleInputInfo()
 {
-    if (getKeyOn(KEY_CROSS)) {
+    if (getKeyOn(KEY_R3)) {
+        menuToggleFavorite();
+        if (!selected_item->item->current)
+            guiSwitchScreen(GUI_SCREEN_MAIN);
+    } else if (getKeyOn(KEY_L3)) {
+        menuToggleFavoritesFilter();
+        guiSwitchScreen(GUI_SCREEN_MAIN);
+    } else if (getKeyOn(KEY_CROSS)) {
         if (gSelectButton == KEY_CIRCLE)
             guiSwitchScreen(GUI_SCREEN_MAIN);
         else

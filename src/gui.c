@@ -23,6 +23,7 @@
 #include "include/cheatman.h"
 #include "include/sound.h"
 #include "include/guigame.h"
+#include "include/favorites.h"
 
 #include <limits.h>
 #include <stdlib.h>
@@ -508,8 +509,11 @@ void guiShowConfig()
     // configure the enumerations
     const char *deviceNames[] = {_l(_STR_BDM_GAMES), _l(_STR_NET_GAMES), _l(_STR_HDD_GAMES), _l(_STR_APPS), NULL};
     const char *deviceModes[] = {_l(_STR_OFF), _l(_STR_MANUAL), _l(_STR_AUTO), NULL};
+    const char *favoritesStorage[] = {_l(_STR_FAVORITES_STORAGE_DEVICE), _l(_STR_FAVORITES_STORAGE_MC), NULL};
 
     diaSetEnum(diaConfig, CFG_DEFDEVICE, deviceNames);
+    diaSetEnum(diaConfig, CFG_FAVORITES_STORAGE, favoritesStorage);
+    diaSetInt(diaConfig, CFG_FAVORITES_STORAGE, gFavoritesStorage);
     diaSetEnum(diaConfig, CFG_BDMMODE, deviceModes);
     diaSetEnum(diaConfig, CFG_HDDMODE, deviceModes);
     diaSetEnum(diaConfig, CFG_ETHMODE, deviceModes);
@@ -543,6 +547,10 @@ void guiShowConfig()
 
     int ret = diaExecuteDialog(diaConfig, -1, 1, &guiUpdater);
     if (ret) {
+        int previousFavoritesStorage = gFavoritesStorage;
+        diaGetInt(diaConfig, CFG_FAVORITES_STORAGE, &gFavoritesStorage);
+        if (previousFavoritesStorage != gFavoritesStorage)
+            menuReloadFavorites();
         diaGetInt(diaConfig, CFG_DEBUG, &gEnableDebug);
         diaGetInt(diaConfig, CFG_PS2LOGO, &gPS2Logo);
         diaGetInt(diaConfig, CFG_HDDGAMELISTCACHE, &gHDDGameListCache);
@@ -1008,14 +1016,17 @@ static void guiHandleOp(struct gui_update_t *item)
 
         case GUI_OP_APPEND_MENU:
             result = submenuAppendItem(item->menu.subMenu, item->submenu.icon_id, item->submenu.text, item->submenu.id, item->submenu.text_id);
+            item_list_t *support = item->menu.menu->userdata;
+            result->item.favorite = support->mode != APP_MODE &&
+                                    favoritesContains(support->mode, support->itemGetStartup(support, result->item.id));
             if (!item->menu.menu->submenu) { // first subitem in list
                 item->menu.menu->submenu = result;
-                if (!item->submenu.selected) {
-                    item->menu.menu->current = result;
-                    item->menu.menu->pagestart = result;
-                }
             }
-            if (item->submenu.selected) { // remember last played game feature
+            if (!item->menu.menu->current && menuItemIsVisible(item->menu.menu, result)) {
+                item->menu.menu->current = result;
+                item->menu.menu->pagestart = result;
+            }
+            if (item->submenu.selected && menuItemIsVisible(item->menu.menu, result)) { // remember last played game feature
                 item->menu.menu->current = result;
                 item->menu.menu->pagestart = result;
                 item->menu.menu->remindLast = 1;
@@ -1037,6 +1048,7 @@ static void guiHandleOp(struct gui_update_t *item)
             item->menu.menu->submenu = NULL;
             item->menu.menu->current = NULL;
             item->menu.menu->pagestart = NULL;
+            menuResetViewPositions(item->menu.menu);
             break;
 
         case GUI_OP_SORT:
@@ -1044,9 +1056,9 @@ static void guiHandleOp(struct gui_update_t *item)
             item->menu.menu->submenu = *item->menu.subMenu;
 
             if (!item->menu.menu->remindLast)
-                item->menu.menu->current = item->menu.menu->submenu;
+                item->menu.menu->current = menuFirstVisible(item->menu.menu);
 
-            item->menu.menu->pagestart = item->menu.menu->current;
+            menuNormalizeSelection(item->menu.menu);
             break;
 
         case GUI_OP_ADD_HINT:

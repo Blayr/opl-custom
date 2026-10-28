@@ -20,6 +20,7 @@
 #include "include/system.h"
 #include "include/debug.h"
 #include "include/config.h"
+#include "include/favorites.h"
 #include "include/util.h"
 #include "include/compatupd.h"
 #include "include/extern_irx.h"
@@ -93,6 +94,8 @@ static void clearIOModuleT(opl_io_module_t *mod)
     mod->menuItem.submenu = NULL;
     mod->menuItem.pagestart = NULL;
     mod->menuItem.remindLast = 0;
+    mod->menuItem.favoritesOnly = 0;
+    menuResetViewPositions(&mod->menuItem);
     mod->menuItem.refresh = NULL;
     mod->menuItem.text = NULL;
     mod->menuItem.text_id = -1;
@@ -143,6 +146,7 @@ int gAutosort;
 int gAutoRefresh;
 int gEnableNotifications;
 int gEnableArt;
+int gFavoritesStorage;
 int gWideScreen;
 int gVMode; // 0 - Auto, 1 - PAL, 2 - NTSC
 int gXOff;
@@ -355,6 +359,8 @@ static void initMenuForListSupport(opl_io_module_t *mod)
     mod->menuItem.pagestart = NULL;
     mod->menuItem.remindLast = 0;
 
+    mod->menuItem.favoritesOnly = 0;
+    menuResetViewPositions(&mod->menuItem);
     mod->menuItem.refresh = &itemExecRefresh;
     mod->menuItem.execCross = &itemExecCross;
     mod->menuItem.execTriangle = &itemExecTriangle;
@@ -381,6 +387,7 @@ static void clearMenuGameList(opl_io_module_t *mdl)
         mdl->menuItem.submenu = NULL;
         mdl->menuItem.current = NULL;
         mdl->menuItem.pagestart = NULL;
+        menuResetViewPositions(&mdl->menuItem);
         mdl->menuItem.remindLast = 0;
 
         // unlock
@@ -667,6 +674,7 @@ static void updateMenuFromGameList(opl_io_module_t *mdl)
     // read the new game list
     struct gui_update_t *gup = NULL;
     int count = mdl->support->itemUpdate(mdl->support);
+    favoritesLoad(mdl->support->mode, mdl->support->itemGetPrefix ? mdl->support->itemGetPrefix(mdl->support) : NULL);
     if (count > 0) {
         int i;
 
@@ -908,6 +916,9 @@ static void _loadConfig()
             configGetColor(configOPL, CONFIG_OPL_SEL_TEXTCOLOR, gDefaultSelTextColor);
             configGetInt(configOPL, CONFIG_OPL_ENABLE_NOTIFICATIONS, &gEnableNotifications);
             configGetInt(configOPL, CONFIG_OPL_ENABLE_COVERART, &gEnableArt);
+            configGetInt(configOPL, CONFIG_OPL_FAVORITES_STORAGE, &gFavoritesStorage);
+            if (gFavoritesStorage != FAVORITES_STORAGE_MC)
+                gFavoritesStorage = FAVORITES_STORAGE_DEVICE;
             configGetInt(configOPL, CONFIG_OPL_WIDESCREEN, &gWideScreen);
 
             if (!(getKeyPressed(KEY_TRIANGLE) && getKeyPressed(KEY_CROSS))) {
@@ -1099,6 +1110,7 @@ static void _saveConfig()
         configSetColor(configOPL, CONFIG_OPL_SEL_TEXTCOLOR, gDefaultSelTextColor);
         configSetInt(configOPL, CONFIG_OPL_ENABLE_NOTIFICATIONS, gEnableNotifications);
         configSetInt(configOPL, CONFIG_OPL_ENABLE_COVERART, gEnableArt);
+        configSetInt(configOPL, CONFIG_OPL_FAVORITES_STORAGE, gFavoritesStorage);
         configSetInt(configOPL, CONFIG_OPL_WIDESCREEN, gWideScreen);
         configSetInt(configOPL, CONFIG_OPL_VMODE, gVMode);
         configSetInt(configOPL, CONFIG_OPL_XOFF, gXOff);
@@ -1643,6 +1655,7 @@ static void moduleCleanup(opl_io_module_t *mod, int exception, int modeSelected)
     }
 
     clearMenuGameList(mod);
+    favoritesUnload(mod->support->mode);
 }
 
 void deinit(int exception, int modeSelected)
@@ -1658,6 +1671,7 @@ void deinit(int exception, int modeSelected)
     unloadPads();
 
     deinitAllSupport(exception, modeSelected);
+    favoritesEnd();
 
     audioEnd();
     ioEnd();
@@ -1750,6 +1764,7 @@ static void setDefaults(void)
     gETHPrefix[0] = '\0';
     gEnableNotifications = 0;
     gEnableArt = 0;
+    gFavoritesStorage = FAVORITES_STORAGE_DEVICE;
     gWideScreen = 0;
     gEnableSFX = 0;
     gEnableBootSND = 0;

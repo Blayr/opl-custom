@@ -19,6 +19,9 @@ typedef struct submenu_item
     /// item id (MUST BE VALID, we assert it is != -1 to optimize rendering)
     int id;
 
+    /// Cached favorite state; independent of the displayed title.
+    int favorite;
+
     int *cache_id;
     int *cache_uid;
 } submenu_item_t;
@@ -59,6 +62,15 @@ typedef struct menu_item
     struct submenu_list *submenu, *current, *pagestart;
 
     short remindLast;
+    short favoritesOnly;
+
+    // Independent positions for All Games (0) and Favorites (1).
+    struct
+    {
+        int valid;
+        int currentId;
+        int pageStartId;
+    } viewPositions[2];
 
     void (*refresh)(struct menu_item *curMenu);
 
@@ -95,6 +107,15 @@ void submenuRemoveItem(submenu_list_t **submenu, int id);
 void submenuDestroy(submenu_list_t **submenu);
 void submenuSort(submenu_list_t **submenu);
 
+int menuItemIsVisible(const menu_item_t *menu, const submenu_list_t *item);
+submenu_list_t *menuNextVisible(const menu_item_t *menu, submenu_list_t *item);
+submenu_list_t *menuPrevVisible(const menu_item_t *menu, submenu_list_t *item);
+submenu_list_t *menuFirstVisible(const menu_item_t *menu);
+void menuNormalizeSelection(menu_item_t *menu);
+void menuNormalizePage(menu_item_t *menu, int rows);
+void menuResetViewPositions(menu_item_t *menu);
+void menuToggleFavoritesView(menu_item_t *menu, int rows);
+
 char *submenuItemGetText(submenu_item_t *it);
 char *menuItemGetText(menu_item_t *it);
 config_set_t *menuLoadConfig();
@@ -107,6 +128,7 @@ void menuRenderInfo();
 void menuRenderGameMenu();
 void menuRenderAppMenu();
 void menuHandleInputMain();
+void menuReloadFavorites(void);
 void menuHandleInputMenu();
 void menuHandleInputInfo();
 void menuHandleInputGameMenu();

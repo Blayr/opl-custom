@@ -14,7 +14,11 @@ typedef struct
     // only for comparison if the deferred action is still valid
     int cacheUID;
     char *value;
+    int speculative;
+    unsigned int generation;
 } load_image_request_t;
+
+static volatile int prefetchPending;
 
 // Io handled action...
 static void cacheLoadImage(void *data)
@@ -33,6 +37,17 @@ static void cacheLoadImage(void *data)
     if (req->cacheUID != req->entry->UID)
         return;
 
+    // Drop obsolete work before touching the device. An in-flight device read
+    // cannot be interrupted safely, so at most one speculative read is allowed.
+    if (req->speculative && (req->generation != req->cache->prefetchGeneration || guiInactiveFrames < handler->delay)) {
+        req->entry->qr = NULL;
+        req->entry->UID = 0;
+        req->entry->lastUsed = -1;
+        prefetchPending = 0;
+        free(req);
+        return;
+    }
+
     // seems okay. we can proceed
     GSTEXTURE *texture = &req->entry->texture;
     texFree(texture);
@@ -43,6 +58,9 @@ static void cacheLoadImage(void *data)
         req->entry->lastUsed = guiFrameId;
 
     req->entry->qr = NULL;
+
+    if (req->speculative)
+        prefetchPending = 0;
 
     free(req);
 }
@@ -94,6 +112,10 @@ image_cache_t *cacheInitCache(int userId, const char *prefix, int isPrefixRelati
     cache->suffix = (char *)malloc(length * sizeof(char));
     memcpy(cache->suffix, suffix, length);
     cache->nextUID = 1;
+    cache->prefetchOwner = NULL;
+    cache->prefetchItem = -1;
+    cache->prefetchFilter = 0;
+    cache->prefetchGeneration = 0;
     cache->content = (cache_entry_t *)malloc(count * sizeof(cache_entry_t));
 
     int i;
@@ -116,16 +138,21 @@ void cacheDestroyCache(image_cache_t *cache)
     free(cache);
 }
 
-GSTEXTURE *cacheGetTexture(image_cache_t *cache, item_list_t *list, int *cacheId, int *UID, char *value)
+static GSTEXTURE *cacheRequestTexture(image_cache_t *cache, item_list_t *list, int *cacheId, int *UID, char *value, int speculative)
 {
     if (*cacheId == -2) {
         return NULL;
     } else if (*cacheId != -1) {
         cache_entry_t *entry = &cache->content[*cacheId];
         if (entry->UID == *UID) {
-            if (entry->qr)
+            if (entry->qr) {
+                load_image_request_t *req = entry->qr;
+                if (!speculative && req->speculative) {
+                    req->speculative = 0;
+                    prefetchPending = 0;
+                }
                 return NULL;
-            else if (entry->lastUsed == 0) {
+            } else if (entry->lastUsed == 0) {
                 *cacheId = -2;
                 return NULL;
             } else {
@@ -139,6 +166,9 @@ GSTEXTURE *cacheGetTexture(image_cache_t *cache, item_list_t *list, int *cacheId
 
     // under the cache pre-delay (to avoid filling cache while moving around)
     if (guiInactiveFrames < list->delay)
+        return NULL;
+
+    if (speculative && (prefetchPending || ioHasPendingRequests()))
         return NULL;
 
     cache_entry_t *currEntry, *oldestEntry = NULL;
@@ -155,6 +185,10 @@ GSTEXTURE *cacheGetTexture(image_cache_t *cache, item_list_t *list, int *cacheId
 
     if (oldestEntry) {
         load_image_request_t *req = malloc(sizeof(load_image_request_t) + strlen(value) + 1);
+        if (!req)
+            return NULL;
+        req->speculative = speculative;
+        req->generation = cache->prefetchGeneration;
         req->cache = cache;
         req->entry = oldestEntry;
         req->list = list;
@@ -168,8 +202,36 @@ GSTEXTURE *cacheGetTexture(image_cache_t *cache, item_list_t *list, int *cacheId
 
         *UID = cache->nextUID++;
 
-        ioPutRequest(IO_CACHE_LOAD_ART, req);
+        if (speculative)
+            prefetchPending = 1;
+        if (ioPutRequest(IO_CACHE_LOAD_ART, req) != IO_OK) {
+            if (speculative)
+                prefetchPending = 0;
+            cacheClearItem(oldestEntry, 0);
+            *cacheId = -1;
+            free(req);
+        }
     }
 
     return NULL;
+}
+
+GSTEXTURE *cacheGetTexture(image_cache_t *cache, item_list_t *list, int *cacheId, int *UID, char *value)
+{
+    return cacheRequestTexture(cache, list, cacheId, UID, value, 0);
+}
+
+void cacheSetPrefetchWindow(image_cache_t *cache, void *owner, int item, int filter)
+{
+    if (cache->prefetchOwner != owner || cache->prefetchItem != item || cache->prefetchFilter != filter) {
+        cache->prefetchOwner = owner;
+        cache->prefetchItem = item;
+        cache->prefetchFilter = filter;
+        cache->prefetchGeneration++;
+    }
+}
+
+void cachePrefetchTexture(image_cache_t *cache, item_list_t *list, int *cacheId, int *UID, char *value)
+{
+    cacheRequestTexture(cache, list, cacheId, UID, value, 1);
 }

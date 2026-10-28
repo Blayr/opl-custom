@@ -495,6 +495,8 @@ static mutable_image_t *initMutableImage(const char *themePath, config_set_t *th
     findDuplicate(theme->appsInfoElems.first, cachePattern, defaultTexture, overlayTexture, mutableImage);
 
     if (cachePattern && !mutableImage->cache) {
+        if ((!strcmp(cachePattern, "ICO") || !strcmp(cachePattern, "COV")) && cacheCount < 5)
+            cacheCount = 5;
         if (type == ELEM_TYPE_ATTRIBUTE_IMAGE)
             mutableImage->cache = cacheInitCache(-1, themePath, 0, cachePattern, 1);
         else
@@ -555,8 +557,31 @@ static GSTEXTURE *getGameImageTexture(image_cache_t *cache, void *support, struc
 static void drawGameImage(struct menu_list *menu, struct submenu_list *item, config_set_t *config, struct theme_element *elem)
 {
     mutable_image_t *gameImage = (mutable_image_t *)elem->extended;
+    image_cache_t *cache = gameImage->cache;
+    item_list_t *support = menu->item->userdata;
+    const int prefetch = gEnableArt && support->mode != APP_MODE &&
+                         (!strcmp(cache->suffix, "ICO") || !strcmp(cache->suffix, "COV"));
+    if (prefetch)
+        cacheSetPrefetchWindow(cache, support, item ? item->item.id : -1, menu->item->favoritesOnly);
     if (item) {
         GSTEXTURE *texture = getGameImageTexture(gameImage->cache, menu->item->userdata, &item->item);
+        // Demand loading always comes first. Use the same visible order as
+        // navigation, including the favorites filter, without loading backgrounds.
+        if (prefetch && (texture || item->item.cache_id[cache->userId] == -2)) {
+            submenu_list_t *above = item, *below = item;
+            for (int distance = 0; distance < 2; distance++) {
+                above = menuPrevVisible(menu->item, above);
+                below = menuNextVisible(menu->item, below);
+                submenu_list_t *neighbors[2] = {below, above};
+                for (int i = 0; i < 2; i++) {
+                    if (neighbors[i]) {
+                        struct submenu_item *neighbor = &neighbors[i]->item;
+                        cachePrefetchTexture(cache, support, &neighbor->cache_id[cache->userId],
+                                             &neighbor->cache_uid[cache->userId], support->itemGetStartup(support, neighbor->id));
+                    }
+                }
+            }
+        }
         if (!texture || !texture->Mem) {
             if (gameImage->defaultTexture)
                 texture = &gameImage->defaultTexture->source;
@@ -839,6 +864,15 @@ static void drawBDMIndex(struct menu_list *menu, struct submenu_list *item, conf
 
 static void drawItemsList(struct menu_list *menu, struct submenu_list *item, config_set_t *config, struct theme_element *elem)
 {
+    item_list_t *support = menu->item->userdata;
+    if (support->mode != APP_MODE) {
+        const char *hint = _l(menu->item->favoritesOnly ? _STR_FAVORITES_HINT_FILTERED : _STR_FAVORITES_HINT_ALL);
+        fntRenderString(elem->font, elem->posX, elem->posY - MENU_ITEM_HEIGHT,
+                        elem->aligned, elem->width, MENU_ITEM_HEIGHT, hint, elem->color);
+        if (!item && menu->item->favoritesOnly)
+            fntRenderString(elem->font, elem->posX, elem->posY, elem->aligned,
+                            elem->width, elem->height, _l(_STR_FAVORITES_EMPTY), elem->color);
+    }
     if (item) {
         items_list_t *itemsList = (items_list_t *)elem->extended;
 
@@ -857,6 +891,8 @@ static void drawItemsList(struct menu_list *menu, struct submenu_list *item, con
             else
                 color = elem->color;
 
+            char title[256];
+            snprintf(title, sizeof(title), "%s%s", ps->item.favorite ? "* " : "", submenuItemGetText(&ps->item));
             if (itemsList->decoratorImage) {
                 GSTEXTURE *itemIconTex = getGameImageTexture(itemsList->decoratorImage->cache, menu->item->userdata, &ps->item);
                 if (itemIconTex && itemIconTex->Mem)
@@ -865,12 +901,12 @@ static void drawItemsList(struct menu_list *menu, struct submenu_list *item, con
                     if (itemsList->decoratorImage->defaultTexture)
                         rmDrawPixmap(&itemsList->decoratorImage->defaultTexture->source, posX, posY, elem->aligned, DECORATOR_SIZE, DECORATOR_SIZE, elem->scaled, gDefaultCol);
                 }
-                fntRenderString(elem->font, elem->posX + DECORATOR_SIZE, posY, elem->aligned, elem->width, elem->height, submenuItemGetText(&ps->item), color);
+                fntRenderString(elem->font, elem->posX + DECORATOR_SIZE, posY, elem->aligned, elem->width, elem->height, title, color);
             } else
-                fntRenderString(elem->font, elem->posX, posY, elem->aligned, elem->width, elem->height, submenuItemGetText(&ps->item), color);
+                fntRenderString(elem->font, elem->posX, posY, elem->aligned, elem->width, elem->height, title, color);
 
             posY += MENU_ITEM_HEIGHT;
-            ps = ps->next;
+            ps = menuNextVisible(menu->item, ps);
         }
     }
 }
