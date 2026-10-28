@@ -24,11 +24,6 @@ commit `b3a21997` (v1.2.0 Beta, revision 2271). This is not an official OPL rele
   for the next two visible games above and below the selection. It respects the
   favorites filter, drops obsolete queued work, and limits speculative loading
   during navigation.
-- **Game-list UI improvements:** gold star icons mark favorites without shifting
-  game names. The top shows only the current view heading, with extra space above
-  the list. L3/R3 icons join the bottom button legend, using **Favorites / All
-  Games** and **Favorite / Unfavorite** labels. Favorite saves keep the normal
-  screen visible without flashing a progress dialog.
 - **Build and development tools:** a Docker-based Windows build script, host
   regression tests, emulator launch helpers, and a fix for C header dependency
   tracking in the Makefile.
